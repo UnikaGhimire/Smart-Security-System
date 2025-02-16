@@ -1,0 +1,143 @@
+#include <Servo.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+LiquidCrystal_I2C lcd(0x26, 16, 2);
+
+#define buzzer 11
+#define redPin 3
+#define greenPin 7
+#define bluePin 6
+#define pirPin 8
+
+Servo myservo;
+
+int passwordCorrect = 0;
+int flexValue = 0;
+int pirState = 0;
+int ldrValue = 0;
+int ldr1Value = 0;
+int intensity = 200;
+
+void setup() {
+    Serial.begin(9600);
+    myservo.attach(5);
+    pinMode(buzzer, OUTPUT);
+    pinMode(redPin, OUTPUT);
+    pinMode(greenPin, OUTPUT);
+    pinMode(bluePin, OUTPUT);
+    pinMode(pirPin, INPUT);
+
+    lcd.init();
+    lcd.backlight();
+    lcd.print("Unika security");
+    delay(500);
+    lcd.clear();
+}
+
+void loop() {
+    if (ldr1Value < 800) {
+        if (pirState == 1) {
+            lcd.setCursor(0, 0);
+            lcd.print("Motion Detected!");
+            digitalWrite(redPin, HIGH);
+            analogWrite(buzzer, intensity);
+            delay(500);
+            lcd.clear();
+        }
+    } else {
+        digitalWrite(greenPin, LOW);
+        analogWrite(buzzer, 0);
+    }
+
+    if (Serial.available()) {
+        String data = Serial.readStringUntil('\n');
+        if (data.length() > 0) {
+            Serial.println("Received: " + data);
+            parseData(data);
+            Serial.print("Parsed Values - ");
+            Serial.print("Password: "); Serial.print(passwordCorrect);
+            Serial.print(", Flex: "); Serial.print(flexValue);
+            Serial.print(", PIR: "); Serial.print(pirState);
+            Serial.print(", LDR1: "); Serial.print(ldrValue);
+            Serial.print(", LDR2: "); Serial.println(ldr1Value);
+
+            checkLDR();
+            setRGB(flexValue);
+
+            if (passwordCorrect == 1) {
+                grantAccess();
+            } else if (passwordCorrect == 0) {
+                denyAccess();
+            } else {
+                Serial.print("Password not entered yet!");
+            }
+        }
+    }
+}
+
+void parseData(String data) {
+    int values[5];
+    int lastIndex = 0;
+    int index = 0;
+
+    for (int i = 0; i < 5; i++) {
+        index = data.indexOf(',', lastIndex);
+        if (index == -1 && i < 4) return;
+        values[i] = data.substring(lastIndex, index).toInt();
+        lastIndex = index + 1;
+    }
+
+    passwordCorrect = values[0];
+    flexValue = values[1];
+    pirState = values[2];
+    ldrValue = values[3];
+    ldr1Value = values[4];
+}
+
+void checkLDR() {
+    if (ldrValue < 800) {
+        lcd.setCursor(0, 0);
+        lcd.print("LASER BREACH");
+        analogWrite(buzzer, intensity);
+        delay(500);
+        lcd.clear();
+    } else {
+        analogWrite(buzzer, 0);
+    }
+}
+
+void grantAccess() {
+    myservo.write(180);
+    lcd.setCursor(0, 0);
+    lcd.print("Access Granted");
+    delay(500);
+    myservo.write(0);
+    lcd.clear();
+}
+
+void denyAccess() {
+    lcd.setCursor(0, 0);
+    lcd.print("Access Denied");
+    analogWrite(buzzer, intensity);
+    delay(500);
+    lcd.clear();
+}
+
+void setRGB(int flex) {
+    if (flex < 15) {
+        lcd.setCursor(0, 0);
+        lcd.print("Door Intrusion");
+        analogWrite(buzzer, intensity);
+        digitalWrite(greenPin, HIGH);
+        delay(100);
+        digitalWrite(greenPin, LOW);
+        digitalWrite(bluePin, HIGH);
+        delay(100);
+        digitalWrite(bluePin, LOW);
+    } else {
+        analogWrite(buzzer, 0);
+        digitalWrite(greenPin, LOW);
+        digitalWrite(bluePin, LOW);
+    }
+}
